@@ -113,8 +113,8 @@ The correlation between the estimation and the real value can be plot with the R
 
 ### Sample Output
 ```
-0.0131596       0.0131626       37300   37820.5 >a      GCA_000007625.1_ASM762v1_genomic.fna.gz
-0.000150082     0.000245384     369     618.65  >a      GCA_000007245.1_ASM724v1_genomic.fna.gz
+0.0131596       0.0131626       37300   37820.5 >read1      GCA_000007625.1_ASM762v1_genomic.fna.gz
+0.000150082     0.000245384     369     618.65  >read2      GCA_000007245.1_ASM724v1_genomic.fna.gz
 ```
 
 
