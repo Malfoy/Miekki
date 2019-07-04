@@ -3,7 +3,7 @@
 ## Minhash Index Extended to Knead Kmer Intersection
 
 
-[![License](http://img.shields.io/:license-affero-blue.svg)](http://www.gnu.org/licenses/agpl-3.0.en.html)
+[![License](images/http://img.shields.io/:license-affero-blue.svg)](http://www.gnu.org/licenses/agpl-3.0.en.html)
 
 
 ## Description (bird's-eye view) :
@@ -141,12 +141,12 @@ Batch queries could lead to a higher throughput.
 
 ## Description (worm's-eye view)
 The index is composed of 2^h vectors of (hyperminhash) fingerprints and a (shifted) Bloom filter.
-![](MIEKKI.png?raw=true)
+![](images/MIEKKI.png?raw=true)
 Each vector is responsible of the (hyperminhash) fingerprints of a given partition.
 Each of these vector have the same size that is the number of genome indexed.
 The index can be seen as a matrix with column are partitions and line are genomes.
 The Bloom filter contain all the kmers that have been inserted in the index.
-![](MinEquiQueryREGULAR.png.png?raw=true)
+![](images/MinEquiQueryREGULAR.png.png?raw=true)
 
 For each genome, all kmers are hashed and partitionned according to the h first bit of their hashes.
 For each partition the minimal (hashed) kmer is inserted into a (shifted) bloom filter and its hyperminhash fingerprint is stored in the index.
@@ -173,13 +173,13 @@ Only a small fraction of the partition will be non empty.
 Therefore, only a low ammount of column will be read.
 For example a kilobase query will only need to read at most 1000 columns wich account for a small fraction of the index (100k to 1M columns).
 This is therefore an important optimization when is index is very large.
-![](MinEquiQuerySMALL2.png?raw=true)
+![](images/MinEquiQuerySMALL2.png?raw=true)
 
 3) A unrelated (or erroneous) sequence is queried.
 Only a small fraction of the selected kmer will found in the Bloom filter.
 As before only relevant sub parts of the index will be read and compared.
 It also efficiently reduce the amount of False positive fingerprint matches that could occur "by chance".
-![](MinEquiQueryERR2.png?raw=true)
+![](images/MinEquiQueryERR2.png?raw=true)
 
 
 
