@@ -444,7 +444,6 @@ void Miekki::query_file_exact(const string& str){
 				double jax,inter;
 				jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
 				inter=((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier];
-				cout<<jax<<" "<<inter<<endl;
 				//FILTER ON ration
 				//~ if(jax<threshold){break;}
 				string file_name(file_names[result[i].sequence_identifier]);

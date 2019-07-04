@@ -108,7 +108,8 @@ The output is formated as:
 
 real_jaccard   jaccard_estimation   real_intersection_size   intersection_size_estimation	sequence_header   genome_file_name
 
-The correlation between the estimation and the real value can be plot with the R script ScatterMiekki.r
+The correlation between the estimation and the real value can be plot with the R script ScatterMiekki.r to get plot like this:
+![](scripts/Correlation.png?raw=true)
 
 ### Sample Output
 ```

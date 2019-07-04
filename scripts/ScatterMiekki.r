@@ -23,14 +23,14 @@ lm_eqn <- function(df){
 ggplot_alternative <- function()
 {
 df <- read.table(args[1],header=FALSE)
-p<-ggplot(df, aes(x=(df$V1), y=df$V2)) + geom_point(alpha=0.2,color=1) + geom_smooth(method=lm,formula = y ~ x) +
+p<-ggplot(df, aes(x=(df$V1), y=df$V2)) + geom_point(alpha=1,color=1) + geom_smooth(method=lm,formula = y ~ x) +
 stat_poly_eq(formula = y ~ x, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) + geom_abline(intercept = 0, slope = 1)+  theme_light()
 
 #~  +stat_density_2d(aes(fill = ..level..), geom = "polygon")
 
 p+labs(x = "Real",y="Estimated") + ggtitle( paste(nrow(df)," points"))
 
-p2<-ggplot(df, aes(x=(df$V3), y=df$V4)) + geom_point(alpha=0.2,color=1) + geom_smooth(method=lm,formula = y ~ x) +
+p2<-ggplot(df, aes(x=(df$V3), y=df$V4)) + geom_point(alpha=1,color=1) + geom_smooth(method=lm,formula = y ~ x) +
 stat_poly_eq(formula = y ~ x, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) + geom_abline(intercept = 0, slope = 1)+  theme_light()
 
 #~  +stat_density_2d(aes(fill = ..level..), geom = "polygon")
@@ -46,9 +46,9 @@ figure <- ggarrange(p, p2,
 
 
 ggsave(
-  paste(args[1],".pdf"),
+  paste(args[1],".png"),
   ggplot_alternative(),
-  device="pdf",
+  device="png",
   width = 20,
   height = 10,
   dpi = 1200
