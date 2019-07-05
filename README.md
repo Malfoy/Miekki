@@ -187,7 +187,9 @@ As before only relevant sub parts of the index will be read and compared.
 It also efficiently reduce the amount of False positive fingerprint matches that could occur "by chance".
 ![](images/MinEquiQueryERR2.png?raw=true)
 
+## Benchmark
 
+Coming soon
 
 
 ## Related works
