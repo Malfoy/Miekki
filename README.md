@@ -103,7 +103,7 @@ As expected the more k-mers a query shares with a genome, the easier the match c
 Therefore, larger queries tend to be found even if the index is very small.
 However, smaller queries could need larger indexes to be reliably found.
 
-As a consequence query shorter than 1 kilo base may not be reliably found and the performances of Miekki on such sequences havee yet to be evaluated.
+As a consequence query shorter than 1 kilobase may not be reliably found and the performances of Miekki on such sequences havee yet to be evaluated.
 
 
 ## Exact mode
