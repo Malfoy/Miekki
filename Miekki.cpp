@@ -275,9 +275,9 @@ void Miekki::query_file(const string& str){
 			uint active_minimizer(0);
 			auto result(query_sequence(ref,active_minimizer));
 			string toWrite;
-			for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){//RETURN THE 10 BEST HITS
+			for(uint32_t i(0);i<min((uint32_t)100,(uint32_t)result.size());++i){//RETURN THE 100 BEST HITS
 				//FILTER ON HITS
-				if(result[i].score<10){
+				if(result[i].score<3){
 					break;
 				}
 				double jaccard_value(((double)(result[i].score)/sketch_size[result[i].sequence_identifier]));
@@ -439,7 +439,7 @@ void Miekki::query_file_exact(const string& str){
 			auto result(query_sequence(ref,active_minimizer));
 			for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){
 				//FILTER ON HITS
-				if(result[i].score<10){break;}
+				if(result[i].score<3){break;}
 				//RESULT ESTIMATION
 				double jax,inter;
 				jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
