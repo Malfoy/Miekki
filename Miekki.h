@@ -31,6 +31,7 @@ struct similarity_score{
 class Miekki{
 public:
 	uint32_t kmer_size;
+	uint64_t offsetUpdatekmer;
 	uint32_t number_minimizer;
 	uint32_t number_minimizer_log2;
 	uint32_t number_bit_minimizer;
@@ -71,7 +72,8 @@ public:
 		}
 		out= new ofstream(output_File.c_str());
 		cout<<"I output results in "<<output_File<<endl;
-
+		offsetUpdatekmer=1;
+		offsetUpdatekmer<<=2*kmer_size;
 		containment_estimation=false;
 		number_hash=5;
 		index.assign(number_minimizer,{});
@@ -94,9 +96,15 @@ public:
 
 	//CORE FUNCTIONS
 	void insert_sequence(const string& str, const string& title);
+	void insert_sequences(const vector<pair<string,string>>& Vstr);
 	vector<similarity_score> query_sequence(const string& str,uint32_t& lol);
 	void query_file(const string& str);
+	void query_whole_file(const string& str);
+	void query_file_of_file(const string& str);
+	void query_file_of_file_exact(const string& str);
 	void query_file_exact(const string& str);
+	void query_whole_file_exact(const string& str,unordered_map<string,vector<pair<pair<string,string>,pair<double,double>>>>& batch);
+
 	void index_file(const string& str);
 	void index_file_of_file(const string& str);
 	void dump_disk(const string& output_file);
@@ -107,14 +115,18 @@ public:
 
 	//USAGE FUNCTIONS
 	minimizer mantis(uint64_t n);
-	vector<minimizer>  minhash_sketch_partition(const string& reference);
-	pair<vector<minimizer>,vector<uint64_t>>  minhash_sketch_partition_keep_kmer(const string& reference,uint32_t& am);
+	pair<vector<minimizer>,vector<uint64_t>> minhash_sketch_partition(const string& reference,uint32_t& active_minimizer);
 	void ground_truth(const string& sequence,const string& file, double jax);
 	void ground_truth_batch(vector<pair<pair<string,string>,pair<double,double>>>& V,string file);
 	void insert_bloom(uint64_t);
 	bool check_bloom(uint64_t num);
 	void get_minimizers(const string& str,vector<minimizer>&);
 	void add_index(minimizer m,uint32_t i);
+	void update_kmer(kmer& min, char nuc);
+	void update_kmer_RC(kmer& min, char nuc);
+	kmer rcb(kmer min);
+	void merge_indexes(Miekki* other_index);
+
 };
 
 

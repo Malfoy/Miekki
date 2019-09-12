@@ -41,7 +41,13 @@ string compress_string(const string& str,int compressionlevel);
 string decompress_string(const string& str);
 double parse_line_number(string& str);
 void clean(string& str);
-
+uint64_t nuc2int(char c);
+uint64_t nuc2intrc(char c);
+uint64_t str2numstrand(const string& str);
+uint64_t asm_log2(const uint64_t x);
+uint64_t mylog2 (uint64_t val);
+string kmer2str(uint64_t num,uint k);
+string revComp(const string& s);
 
 
 #endif

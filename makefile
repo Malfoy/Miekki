@@ -1,6 +1,6 @@
 CC=g++
-CFLAGS= -Wall -Ofast -std=c++11  -flto -pipe -funit-at-a-time -fopenmp -lz -Isparsepp
-LDFLAGS=-flto -lpthread -fopenmp -lz  -Isparsepp
+CFLAGS= -Wall -Ofast -std=c++11  -flto -pipe -funit-at-a-time -fopenmp -lz -Isparsepp -g
+LDFLAGS=-flto -lpthread -fopenmp -lz  -Isparsepp -g
 
 
 

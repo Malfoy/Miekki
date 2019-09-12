@@ -23,49 +23,7 @@ using namespace chrono;
 
 
 
-#define kmer uint64_t
 
-
-
-static inline kmer nuc2int(char c){
-	switch(c){
-		/*
-		case 'a': return 0;
-		case 'c': return 1;
-		case 'g': return 2;
-		case 't': return 3;
-		*/
-		case 'A': return 0;
-		case 'C': return 1;
-		case 'G': return 2;
-		case 'T': return 3;
-		case 'N': return 0;
-	}
-	cout<<"Unknow nucleotide: "<<c<<"!"<<endl;
-	exit(0);
-	return 0;
-}
-
-
-
-static inline kmer nuc2intrc(char c){
-	switch(c){
-		/*
-		case 'a': return 0;
-		case 'c': return 1;
-		case 'g': return 2;
-		case 't': return 3;
-		*/
-		case 'A': return 3;
-		case 'C': return 2;
-		case 'G': return 1;
-		case 'T': return 0;
-		case 'N': return 0;
-	}
-	cout<<"Unknow nucleotide: "<<c<<"!"<<endl;
-	exit(0);
-	return 0;
-}
 
 
 
@@ -78,9 +36,6 @@ inline uint number_miss(const string str1,const string str2){
 	}
 	return res;
 }
-
-
-
 
 
 
@@ -171,14 +126,14 @@ int main(int argc, char ** argv){
 		help();
 		exit(0);
 	}
-	string index_file,index_file_of_file,query_fastq,query_fasta,outputFile("out.txt"),index_dump("");
-	uint64_t H(20),core_number(8),kmer_size(31),bloom_size(31),fingerprint_size(2);
+	string index_file,index_file_of_file,query_fastq,query_lines_of_file,query_files_of_list,outputFile("out.txt"),index_dump("");
+	uint64_t H(17),core_number(8),kmer_size(31),bloom_size(33),fingerprint_size(3);
 	double threshold(200);
 	bool exact_mode(false);
 	srand (time(NULL));
 	Miekki *INDEX;
 	char c;
-	while ((c = getopt (argc, argv, "i:l:a:q:h:t:f:k:s:b:o:ed:")) != -1){
+	while ((c = getopt (argc, argv, "i:l:a:h:t:f:k:s:b:o:ed:A:")) != -1){
 		switch(c){
 			case 'i':
 				index_file=optarg;
@@ -187,11 +142,14 @@ int main(int argc, char ** argv){
 				index_file_of_file=optarg;
 				break;
 			case 'a':
-				query_fasta=optarg;
+				query_lines_of_file=optarg;
 				break;
-			case 'q':
-				query_fastq=optarg;
+			case 'A':
+				query_files_of_list=optarg;
 				break;
+			//~ case 'q':
+				//~ query_fastq=optarg;
+				//~ break;
 			case 'o':
 				outputFile=optarg;
 				break;
@@ -222,7 +180,7 @@ int main(int argc, char ** argv){
 		}
 	}
 
-	uint32_t bit_per_min=(6+fingerprint_size);
+	uint32_t bit_per_min=(5+fingerprint_size);
 
 	cout<<"Using "<<bit_per_min<<" bits per minimizer, "<<intToString(1<<H)<<" minimizers so "<<intToString(bit_per_min*(1<<H))<<" bits per sequences"<<endl;
 	auto start = system_clock::now();
@@ -234,7 +192,7 @@ int main(int argc, char ** argv){
 		cout<<"Load sucessful"<<endl;
 		//TODO CHANGE WHAT CAN BE CHANGED
 	}else if(index_file_of_file!=""){
-		INDEX =new Miekki(kmer_size,H,bit_per_min,6,0,outputFile,bloom_size,threshold,core_number);
+		INDEX =new Miekki(kmer_size,H,bit_per_min,5,0,outputFile,bloom_size,threshold,core_number);
 		INDEX->index_file_of_file(index_file_of_file);
 		INDEX->compress_index(1);
 	}else{
@@ -250,14 +208,21 @@ int main(int argc, char ** argv){
 	auto endIndex = system_clock::now();
 	duration<double> elapsed_seconds = endIndex - start;
 	cout<< "elapsed time: " << elapsed_seconds.count() << "s\n";
-	if(query_fasta!=""){
+	if(query_lines_of_file!=""){
 		if(exact_mode){
 			cout<<"running in exact mode, actual intersection will be computed on hits found by the index"<<endl;
-			INDEX->query_file_exact(query_fasta);
+			INDEX->query_file_exact(query_lines_of_file);
 			//TODO HANDLE FASTQ FILES
 		}else{
 			cout<<"running in approx mode, intersection is estimated by the index"<<endl;
-			INDEX->query_file(query_fasta);
+			INDEX->query_file(query_lines_of_file);
+		}
+	}else if(query_files_of_list!=""){
+		if(exact_mode){
+			cout<<"running in exact mode, actual intersection will be computed on hits found by the index"<<endl;
+			INDEX->query_file_of_file_exact(query_files_of_list);
+		}else{
+			INDEX->query_file_of_file(query_files_of_list);
 		}
 	}else{
 		cout<<"No query file, No queries"<<endl;
@@ -265,8 +230,6 @@ int main(int argc, char ** argv){
 	auto endQuery = system_clock::now();
 	elapsed_seconds = endQuery -endIndex;
 	cout<< "elapsed time: " << elapsed_seconds.count() << "s\n";
-
-
 	cout<<"The end"<<endl;
 
 	return 0;

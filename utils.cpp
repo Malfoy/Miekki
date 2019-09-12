@@ -28,7 +28,7 @@ using namespace chrono;
 
 
 
-static inline uint64_t nuc2int(char c){
+  uint64_t nuc2int(char c){
 	switch(c){
 		/*
 		case 'a': return 0;
@@ -40,6 +40,82 @@ static inline uint64_t nuc2int(char c){
 		case 'C': return 1;
 		case 'G': return 2;
 		case 'T': return 3;
+		//~ case 'N': return 0;
+		default: return 0;
+	}
+	//~ cout<<"Unknow nucleotide: "<<c<<"!"<<endl;
+	exit(0);
+	return 0;
+}
+
+
+
+string kmer2str(uint64_t num,uint k){
+	string res;
+	uint64_t anc(1);
+	anc<<=(2*(k-1));
+	for(uint i(0);i<k;++i){
+		uint nuc=num/anc;
+		num=num%anc;
+		if(nuc==3){
+			res+="T";
+		}
+		if(nuc==2){
+			res+="G";
+		}
+		if(nuc==1){
+			res+="C";
+		}
+		if(nuc==0){
+			res+="A";
+		}
+		if (nuc>=4){
+			cout<<nuc<<endl;
+			cout<<"WTF"<<endl;
+		}
+		anc>>=2;
+	}
+	return res;
+}
+
+
+
+
+uint64_t asm_log2(const uint64_t x) {
+  uint64_t y;
+  asm ( "\tbsr %1, %0\n"
+      : "=r"(y)
+      : "r" (x)
+  );
+  return y;
+}
+
+
+uint64_t mylog2 (uint64_t val) {
+    if (val == 0) return 0;
+    if (val == 1) return 0;
+    uint64_t ret = 0;
+    while (val > 1) {
+        val >>= 1;
+        ret++;
+    }
+    return ret;
+}
+
+
+
+  uint64_t nuc2intrc(char c){
+	switch(c){
+		/*
+		case 'a': return 0;
+		case 'c': return 1;
+		case 'g': return 2;
+		case 't': return 3;
+		*/
+		case 'A': return 3;
+		case 'C': return 2;
+		case 'G': return 1;
+		//~ case 'T': return 0;
 		//~ case 'N': return 0;
 		default: return 0;
 	}
@@ -187,12 +263,11 @@ uint64_t str2numstrand(const string& str){
 			case 'c':res+=1;break;
 			case 'g':res+=2;break;
 			case 't':res+=3;break;
-			default: return -1 ;break;
+			default: return 0 ;break;
 			//~ default:cout<<"bug:"<<str[i]<<"!"<<endl;exit(0);
 			//~ default:res+=0;break;
 		}
 	}
-	return unrevhash64(res);
 	return (res);
 }
 

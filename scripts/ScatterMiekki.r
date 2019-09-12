@@ -23,7 +23,7 @@ lm_eqn <- function(df){
 ggplot_alternative <- function()
 {
 df <- read.table(args[1],header=FALSE)
-p<-ggplot(df, aes(x=(df$V1), y=df$V2)) + geom_point(alpha=1,color=1) + geom_smooth(method=lm,formula = y ~ x) +
+p<-ggplot(df, aes(x=(df$V1), y=df$V2),asp=1) + geom_point(alpha=1,color=1) + geom_smooth(method=lm,formula = y ~ x) +
 stat_poly_eq(formula = y ~ x, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) + geom_abline(intercept = 0, slope = 1)+  theme_light()
 
 #~  +stat_density_2d(aes(fill = ..level..), geom = "polygon")

@@ -48,15 +48,67 @@ inline bool exists_test (const std::string& name) {
 
 
 
+void Miekki::update_kmer(kmer& min, char nuc){
+	min<<=2;
+	min+=nuc2int(nuc);
+	min%=offsetUpdatekmer;
+}
+
+
+
+void Miekki::update_kmer_RC(kmer& min, char nuc){
+	min>>=2;
+	min+=(nuc2intrc(nuc)<<(2*kmer_size-2));
+}
+
+
+
+kmer Miekki::rcb(kmer min){
+	kmer res(0);
+	kmer offset(1);
+	offset<<=(2*kmer_size-2);
+	for(uint i(0); i<kmer_size;++i){
+		res+=(3-(min%4))*offset;
+		min>>=2;
+		offset>>=2;
+	}
+	return res;
+}
+
+
+void print_bin(uint64_t n){
+	uint64_t mask=1;
+	mask<<=63;
+	for(uint i(0);i<64;++i){
+		cout<<n/mask;
+		if(n/mask==1){n-=mask;}
+		mask>>=1;
+	}
+	cout<<"\n";
+}
+
+
 minimizer Miekki::mantis(uint64_t n){
 	//~ return n%(maximal_minimizer);//REGULAR MINHASH
-	uint64_t prefix(floor(log2(n)));
+	if(n==0){return (maximal_minimizer);}
+	int64_t prefix((asm_log2(n)));
+	int64_t exp=max(prefix-32+(int64_t)number_minimizer_log2,(int64_t)0);
+	//~ cout<<exp<<endl;
+	//~ print_bin(n);
+	//~ cout<<zero_chain<<endl;
+	//~ if(zero_chain>31){return (maximal_minimizer);}
+	//~ uint64_t prefix2((mylog2(n)));
+	//~ uint64_t prefix3(floor(log2(n)));
+	//~ if(prefix!=prefix2 or prefix2!=prefix3){
+		//~ cout<<n<<" "<<prefix<<" "<<prefix2<<" "<<prefix3<<endl;
+	//~ }
 	int offset=prefix-(number_bit_minimizer-number_bit_mantis);
 	offset=max(offset,0);
 	uint64_t suffix (n-((uint64_t)1<<prefix));
 	suffix>>=offset;
 	uint64_t res=suffix;
-	res+=((prefix)<<(number_bit_minimizer-number_bit_mantis));
+	res+=((exp)<<(number_bit_minimizer-number_bit_mantis));
+	//~ print_bin(res);cin.get();
 	return res;
 }
 
@@ -93,35 +145,25 @@ bool Miekki::check_bloom(uint64_t num){
 
 
 
-vector<minimizer>  Miekki::minhash_sketch_partition(const string& reference){
-	uint64_t mask((uint64_t)1<<(64-number_minimizer_log2));
-	vector<minimizer> res(number_minimizer,0);
-	uint fill(0);
-	for(uint i(0);i+kmer_size-1<reference.size();++i){
-		uint64_t anc(str2num(reference.substr(i,kmer_size)));
-		//~ anc=unrevhash64(anc);
-		uint64_t bucket(anc/mask);
-		uint64_t value(anc%(mask));
-		value=mantis(value);
-		if(res[bucket]==0){
-			fill++;
-		}
-		res[bucket]=max((minimizer)value,res[bucket]);
-	}
-	return res;
-}
-
-
-
-pair<vector<minimizer>,vector<uint64_t>>  Miekki::minhash_sketch_partition_keep_kmer(const string& reference,uint32_t& active_minimizer){
+pair<vector<minimizer>,vector<uint64_t>>  Miekki::minhash_sketch_partition(const string& reference,uint32_t& active_minimizer){
 	uint64_t mask((uint64_t)1<<(64-number_minimizer_log2));
 	vector<minimizer> res(number_minimizer,maximal_minimizer);
 	vector<uint64_t> res2(number_minimizer,maximal_hash);
 	vector<bool> duplicate(number_minimizer,false);
+	//~ cout<<reference.substr(0,100)<<endl;
+	//~ cout<<revComp(reference.substr(0,100))<<endl;
 	active_minimizer=(0);
-	for(uint i(0);i+kmer_size-1<reference.size();++i){
-		uint64_t anc(str2num(reference.substr(i,kmer_size)));
-		anc=unrevhash64(anc);
+	uint64_t S_kmer(str2numstrand(reference.substr(0,kmer_size-1)));
+	//~ cout<<kmer2str(S_kmer,kmer_size)<<endl;;
+	uint64_t RC_kmer(rcb(S_kmer));
+	//~ cout<<kmer2str(RC_kmer,kmer_size)<<endl;;
+	for(uint i(0);i+kmer_size<reference.size();++i){
+		update_kmer(S_kmer,reference[i+kmer_size-1]);
+		update_kmer_RC(RC_kmer,reference[i+kmer_size-1]);
+		//~ cout<<kmer2str(S_kmer,kmer_size)<<endl;
+		//~ cout<<kmer2str(RC_kmer,kmer_size)<<endl;cin.get();
+		uint64_t anc(min(S_kmer,RC_kmer));
+		anc=revhash64(anc);
 		uint64_t bucket(anc/mask);
 		uint64_t value(anc%(mask));
 		value=mantis(value);
@@ -129,6 +171,7 @@ pair<vector<minimizer>,vector<uint64_t>>  Miekki::minhash_sketch_partition_keep_
 			duplicate[bucket]=false;
 			if(res[bucket]==maximal_minimizer){
 				++active_minimizer;
+				//~ cout<<bucket<<" ";
 			}
 			res[bucket]=(minimizer)value;
 			res2[bucket]=anc;
@@ -136,12 +179,18 @@ pair<vector<minimizer>,vector<uint64_t>>  Miekki::minhash_sketch_partition_keep_
 			duplicate[bucket]=true;
 		}
 	}
-	for(uint i(0);i<number_minimizer;++i){
-		if(duplicate[i]){
-			res[i]=res2[i]=maximal_minimizer;
-			--active_minimizer;
-		}
-	}
+	//~ for(uint i(0);i<number_minimizer;++i){
+		//~ if(duplicate[i]){
+			//~ res[i]=res2[i]=maximal_minimizer;
+			//~ --active_minimizer;
+		//~ }
+	//~ }
+	//~ if(active_minimizer*5<reference.size() and active_minimizer*2<number_minimizer){
+		//~ cout<<"WEIRDD"<<endl;
+		//~ cout<<reference.size()<<" "<<active_minimizer<<endl;
+		//~ cin.get();
+		//~ cout<<reference<<endl;cin.get();
+	//~ }
 	return {res,res2};
 }
 
@@ -166,36 +215,70 @@ void Miekki::insert_sequence(const string& str, const string& title){
 	uint32_t actived_minimizer;
 	double approx_cardinality(0);
 	double active_minimizer=0;
-	if(not Bloom_Filter_Protection){
-		vector<minimizer> sketch(minhash_sketch_partition(str));
-		for(uint i(0);i<sketch.size();++i){
-			omp_set_lock(&lock[i%10000]);
-			add_index(sketch[i],i);
-			omp_unset_lock(&lock[i%10000]);
-		}
-	}else{
-		auto double_sketch(minhash_sketch_partition_keep_kmer(str,actived_minimizer));
-		#pragma omp critical(update_index_structure)
-		{
-			for(uint i(0);i<double_sketch.first.size();++i){
-				add_index(double_sketch.first[i],i);
-				if(double_sketch.first[i]!=maximal_minimizer){
-					approx_cardinality+=(1/(pow(2,(double_sketch.first[i]>>(number_bit_minimizer-number_bit_mantis)))));
-					active_minimizer++;
+	auto double_sketch(minhash_sketch_partition(str,actived_minimizer));
+	#pragma omp critical(update_index_structure)
+	{
+		for(uint i(0);i<double_sketch.first.size();++i){
+			add_index(double_sketch.first[i],i);
+			if(double_sketch.first[i]!=maximal_minimizer){
+				approx_cardinality+=(1/(pow(2,(double_sketch.first[i]>>(number_bit_minimizer-number_bit_mantis)))));
+				active_minimizer++;
+				if(not check_bloom(double_sketch.second[i])){
 					#pragma omp critical(bloom)
 					{
-						//~ Bloom_Filter_Forever.insert(double_sketch.second[i]);
 						insert_bloom(double_sketch.second[i]);
 					}
 				}
 			}
-			file_names.push_back(title);
+		}
+		file_names.push_back(title);
+		query_output.push_back({((uint32_t)index[0].size()-(uint32_t)1),0});//TODO OPTIM
+		index_size++;
+		sketch_size.push_back(active_minimizer);
+		approx_cardinality=((0.72134*(active_minimizer*active_minimizer)/approx_cardinality));
+		if(approx_cardinality>str.size()){
+			genome_size.push_back(str.size());
+		}else{
+			genome_size.push_back(approx_cardinality);
+		}
+	}
+}
+
+
+
+void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
+	uint32_t actived_minimizer;
+	double approx_cardinality(0);
+	vector<pair<vector<minimizer>,vector<uint64_t>>> Vsketch;
+	for(uint g(0);g<Vstr.size();g++){
+		auto double_sketch(minhash_sketch_partition(Vstr[g].first,actived_minimizer));
+		Vsketch.push_back(double_sketch);
+	}
+
+	#pragma omp critical(update_index_structure)
+	{
+		for(uint g(0);g<Vstr.size();g++){
+			double active_minimizer=0;
+			for(uint i(0);i<Vsketch[g].first.size();++i){
+				add_index(Vsketch[g].first[i],i);
+				if(Vsketch[g].first[i]!=maximal_minimizer){
+					approx_cardinality+=(1/(pow(2,(Vsketch[g].first[i]>>(number_bit_minimizer-number_bit_mantis)))));
+					active_minimizer++;
+					if(not check_bloom(Vsketch[g].second[i])){
+						#pragma omp critical(bloom)
+						{
+							insert_bloom(Vsketch[g].second[i]);
+						}
+					}
+				}
+			}
+			file_names.push_back(Vstr[g].second);
 			query_output.push_back({((uint32_t)index[0].size()-(uint32_t)1),0});//TODO OPTIM
 			index_size++;
 			sketch_size.push_back(active_minimizer);
 			approx_cardinality=((0.72134*(active_minimizer*active_minimizer)/approx_cardinality));
-			if(approx_cardinality>str.size()){
-				genome_size.push_back(str.size());
+			if(approx_cardinality>Vstr[g].first.size()){
+				genome_size.push_back(Vstr[g].first.size());
 			}else{
 				genome_size.push_back(approx_cardinality);
 			}
@@ -213,38 +296,23 @@ bool compare_Similarity_score(const similarity_score &a, const similarity_score 
 
 vector<similarity_score> Miekki::query_sequence(const string& str,uint32_t& active_minimizer){
 	vector<similarity_score> result=(query_output);
-	if(not Bloom_Filter_Protection){
-		vector<minimizer> sketch(minhash_sketch_partition(str));
-		vector<minimizer> slice;
-		for(uint32_t i(0);i<sketch.size();++i){
-			minimizer query_minimizer(sketch[i]);
-			if(query_minimizer!=maximal_minimizer){
-				get_minimizers(index[i],slice);
-				for(uint32_t j(0);j<slice.size();++j){
-					if(query_minimizer==slice[j]){
-						result[j].score++;
-					}
-				}
+	auto double_sketch(minhash_sketch_partition(str,active_minimizer));
+	//~ cout<<str.size()<<" "<<active_minimizer<<endl;
+	active_minimizer=0;
+	vector<minimizer> slice;
+	for(uint32_t i(0);i<double_sketch.first.size();++i){
+		minimizer query_minimizer(double_sketch.first[i]);
+		if(query_minimizer!=maximal_minimizer){
+			//~ if(Bloom_Filter_Forever.count(double_sketch.second[i])==0){
+			if(not check_bloom(double_sketch.second[i])){
+				continue;
 			}
-		}
-	}else{
-		auto double_sketch(minhash_sketch_partition_keep_kmer(str,active_minimizer));
-		active_minimizer=(0);
-		vector<minimizer> slice;
-		for(uint32_t i(0);i<double_sketch.first.size();++i){
-			minimizer query_minimizer(double_sketch.first[i]);
-			if(query_minimizer!=maximal_minimizer){
-				//~ if(Bloom_Filter_Forever.count(double_sketch.second[i])==0){
-				if(not check_bloom(double_sketch.second[i])){
-					continue;
-				}
-				active_minimizer++;
-				get_minimizers(index[i],slice);
-				for(uint32_t j(0);j<slice.size();++j){
-					if(query_minimizer==slice[j]){
-						result[j].score++;
-					}else{
-					}
+			active_minimizer++;
+			get_minimizers(index[i],slice);
+			for(uint32_t j(0);j<slice.size();++j){
+				if(query_minimizer==slice[j]){
+					result[j].score++;
+				}else{
 				}
 			}
 		}
@@ -277,7 +345,7 @@ void Miekki::query_file(const string& str){
 			string toWrite;
 			for(uint32_t i(0);i<min((uint32_t)100,(uint32_t)result.size());++i){//RETURN THE 100 BEST HITS
 				//FILTER ON HITS
-				if(result[i].score<3){
+				if(result[i].score<5){
 					break;
 				}
 				double jaccard_value(((double)(result[i].score)/sketch_size[result[i].sequence_identifier]));
@@ -294,6 +362,48 @@ void Miekki::query_file(const string& str){
 					*out<<head<<":"<<toWrite<<"\n";
 				}
 			}
+		}
+	}
+	*out<<flush;
+	delete in;
+}
+
+
+
+void Miekki::query_whole_file(const string& str){
+	if(not exists_test(str)){cout<<"File problem"<<endl;return;}
+	auto in=new zstr::ifstream(str);
+	string ref,line;
+	while(not in->eof()){
+		getline(*in,line);
+		if(line[0]=='>'){
+		}else{
+			ref+=line;
+		}
+	}
+	if(ref.size()<kmer_size){
+		return;
+	}
+	uint active_minimizer(0);
+	auto result(query_sequence(ref,active_minimizer));
+	string toWrite;
+	for(uint32_t i(0);i<min((uint32_t)100,(uint32_t)result.size());++i){//RETURN THE 100 BEST HITS
+		//FILTER ON HITS
+		if(result[i].score<3){
+			break;
+		}
+		double jaccard_value(((double)(result[i].score)/sketch_size[result[i].sequence_identifier]));
+		double intersection_value(((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier]);
+		if(intersection_value>0.5*threshold){
+			toWrite+=(file_names[i]+"	"+to_string(result[i].score)+"	"+to_string((uint)intersection_value)+"	"+ to_string(jaccard_value)+";");
+		}else{
+			break;
+		}
+	}
+	if(toWrite.size()>0){
+		#pragma omp critical(outfile)
+		{
+			*out<<str<<":"<<toWrite<<"\n";
 		}
 	}
 	*out<<flush;
@@ -330,8 +440,60 @@ void Miekki::index_file_of_file(const string& str){
 		return;
 	}
 	auto in=new zstr::ifstream(str);
+	#pragma omp parallel num_threads(core_number)
+	{
+		vector<pair<string,string>> seq2index;
+		while(not in->eof()){
+			string file_name;
+			#pragma omp critical(fof)
+			{
+				getline(*in,file_name);
+			}
+			if(file_name.size()>3){
+				if(not exists_test(file_name)){
+					cout<<"Missed file: "<<file_name<<endl;
+				}else{
+					auto in2=new zstr::ifstream(file_name);
+					string ref2,line;
+					while(not in2->eof()){
+						getline(*in2,line);
+						if(line[0]=='>'){
+						}else{
+							ref2+=line;
+						}
+					}
+					delete in2;
+					if(ref2.size()>=kmer_size){
+						seq2index.push_back({ref2,file_name});
+						if(seq2index.size()>10){
+							insert_sequences(seq2index);
+							seq2index.clear();
+						}
+						cout<<"-"<<flush;
+					}
+				}
+			}
+		}
+		insert_sequences(seq2index);
+	}
+	cout<<endl;
+	cout<<"Reference indexed: "<<index_size<<endl;
+	if(Bloom_Filter_Protection){
+		cout<<"BF size:"<<intToString(bloom_size)<<endl;
+	}
+	delete in;
+}
 
-	//~ #pragma omp parallel
+
+
+void Miekki::query_file_of_file(const string& str){
+	if(not exists_test(str)){
+		cout<<"Missed file of file: "<<str<<endl;
+		return;
+	}
+	auto in=new zstr::ifstream(str);
+
+	#pragma omp parallel
 	while(not in->eof()){
 		string ref;
 		#pragma omp critical(fof)
@@ -339,15 +501,43 @@ void Miekki::index_file_of_file(const string& str){
 			getline(*in,ref);
 		}
 		if(ref.size()>3){
-			index_file(ref);
+			query_whole_file(ref);
 			cout<<"-"<<flush;
 		}
 	}
-	cout<<endl;
-	cout<<"Reference indexed: "<<index_size<<endl;
-	if(Bloom_Filter_Protection){
-		cout<<"BF size:"<<intToString(bloom_size)<<endl;
+	delete in;
+}
+
+
+
+void Miekki::query_file_of_file_exact(const string& str){
+	if(not exists_test(str)){
+		cout<<"Missed file of file: "<<str<<endl;
+		return;
 	}
+	auto in=new zstr::ifstream(str);
+
+	#pragma omp parallel
+	{
+
+		unordered_map<string,vector<pair<pair<string,string>,pair<double,double>>>> batch;
+		while(not in->eof()){
+			string ref;
+			#pragma omp critical(fof)
+			{
+				getline(*in,ref);
+			}
+			if(ref.size()>3){
+				query_whole_file_exact(ref,batch);
+				cout<<"-"<<flush;
+			}
+		}
+		for (auto itr = batch.begin(); itr != batch.end(); ++itr) {
+			ground_truth_batch(itr->second,itr->first);
+		}
+	}
+
+	*out<<flush;
 	delete in;
 }
 
@@ -431,7 +621,7 @@ void Miekki::query_file_exact(const string& str){
 				getline(*in,head);
 				getline(*in,ref);
 			}
-			if(ref.size()<kmer_size){
+			if(ref.size()<kmer_size or (ref[0]!='A' and ref[0]!='C' and ref[0]!='G' and ref[0]!='T' and ref[0]!='N')){
 				ref="";
 				continue;
 			}
@@ -439,13 +629,13 @@ void Miekki::query_file_exact(const string& str){
 			auto result(query_sequence(ref,active_minimizer));
 			for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){
 				//FILTER ON HITS
-				if(result[i].score<3){break;}
+				if(result[i].score<10){break;}
 				//RESULT ESTIMATION
 				double jax,inter;
 				jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
 				inter=((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier];
 				//FILTER ON ration
-				//~ if(jax<threshold){break;}
+				if(inter<threshold){break;}
 				string file_name(file_names[result[i].sequence_identifier]);
 				batch[file_name].push_back({{ref,head},{jax,inter}});
 				if(batch[file_name].size()>=100){
@@ -466,8 +656,46 @@ void Miekki::query_file_exact(const string& str){
 
 
 
+void Miekki::query_whole_file_exact(const string& str,unordered_map<string,vector<pair<pair<string,string>,pair<double,double>>>>& batch){
+	if(not exists_test(str)){cout<<"File problem"<<endl;return;}
+	auto in=new zstr::ifstream(str);
+	//~ unordered_map<string,vector<pair<pair<string,string>,pair<double,double>>>> batch;
+	string ref,head,line;
+	getline(*in,head);
+	while(not in->eof()){
+		getline(*in,line);
+		if(line.size()<kmer_size or (line[0]!='A' and line[0]!='C' and line[0]!='G' and line[0]!='T' and line[0]!='N')){
+			continue;
+		}else{
+			ref+=line;
+		}
+	}
+	uint active_minimizer(0);
+	auto result(query_sequence(ref,active_minimizer));
+	for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){
+		//FILTER ON HITS
+		if(result[i].score<5){break;}
+		//RESULT ESTIMATION
+		double jax,inter;
+		jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
+		inter=((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier];
+		//FILTER ON ration
+		if(inter<threshold){break;}
+		string file_name(file_names[result[i].sequence_identifier]);
+		batch[file_name].push_back({{ref,str},{jax,inter}});
+		if(batch[file_name].size()>=100){
+			ground_truth_batch(batch[file_name],file_name);
+			batch[file_name].clear();
+		}
+	}
+	delete in;
+}
+
+
+
 void Miekki::ground_truth_batch(vector<pair<pair<string,string>,pair<double,double>>>& V,string file){
 	unordered_set<uint64_t> set_B;
+	//~ cout<<"go"<<endl;
 	//~ double ln(parse_line_number(file));
 	if(not exists_test(file)){
 		cout<<"File problem: "<<file<<endl;
@@ -480,13 +708,9 @@ void Miekki::ground_truth_batch(vector<pair<pair<string,string>,pair<double,doub
 		getline(*in,line);
 		if(line[0]=='>'){
 			if(ref.size()>=kmer_size){
-				//~ if(actual_line==ln){
-					for(uint i(0);i+kmer_size-1<ref.size();++i){
-						set_B.insert(str2num(ref.substr(i,kmer_size)));
-					}
-					ref="";
-					//~ break;
-				//~ }
+				for(uint i(0);i+kmer_size-1<ref.size();++i){
+					set_B.insert(str2num(ref.substr(i,kmer_size)));
+				}
 				ref="";
 				actual_line++;
 			}
@@ -525,11 +749,12 @@ void Miekki::ground_truth_batch(vector<pair<pair<string,string>,pair<double,doub
 			double real_jax((double)nb_inter);
 			real_jax/=nb_union;
 			//FILTER REAL DATA
-			if(nb_inter>1*threshold){
+			if(nb_inter>0){
+			//~ if(nb_inter>1*threshold){
 				//OUTPUT RESULT
 				#pragma omp critical(outfile)
 				{
-					*out<<real_jax<<"	"<<jaccard_estimation<<"	"<<nb_inter<<"	"<<intersection_estimation<<"	"<<V[i].first.second<<"	"<<file<<endl;
+					*out<<real_jax<<"	"<<jaccard_estimation<<"	"<<nb_inter<<"	"<<intersection_estimation<<"	"<<V[i].first.second<<"	"<<file<<"\n";
 				}
 			}
 		}
@@ -574,5 +799,17 @@ void Miekki::get_minimizers(const string& cstr,vector<minimizer>& V){
 			exit(0);
 		}
 	}
+}
+
+
+void Miekki::merge_indexes(Miekki* other_index){
+	uint32_t i;
+	#pragma omp parallel for
+	for(i=(0);i<number_minimizer;++i){
+		index[i].insert(index[i].end(),other_index->index[i].begin(),other_index->index[i].end());
+	}
+	//TODO MERGE BF
+	delete other_index;
+
 }
 
