@@ -105,6 +105,7 @@ void help(){
 	cout<<"-i load a constructed index from disk"<<endl;
 	cout<<"-l construct an index from a list of file"<<endl;
 	cout<<"-a query a fasta file"<<endl;
+	cout<<"-A query  fasta from file of file"<<endl;
 	cout<<"\nOutput "<<endl;
 	cout<<"-o output file name (out.txt)"<<endl;
 	cout<<"-d dump the index on disk"<<endl;
@@ -222,6 +223,7 @@ int main(int argc, char ** argv){
 			cout<<"running in exact mode, actual intersection will be computed on hits found by the index"<<endl;
 			INDEX->query_file_of_file_exact(query_files_of_list);
 		}else{
+			cout<<"running in approx mode, intersection is estimated by the index"<<endl;
 			INDEX->query_file_of_file(query_files_of_list);
 		}
 	}else{
