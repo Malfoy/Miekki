@@ -99,6 +99,8 @@ public:
 	void insert_sequences(const vector<pair<string,string>>& Vstr);
 	vector<similarity_score> query_sequence(const string& str,uint32_t& lol);
 	vector<vector<similarity_score>> query_sequences( vector<pair<string,uint32_t>>& batch);
+	vector<vector<similarity_score>> query_sequences1(vector<pair<string,uint32_t>>& batch);
+	vector<vector<similarity_score>> query_sequences2(vector<pair<string,uint32_t>>& batch);
 	void query_file(const string& str);
 	void query_whole_file(const string& str);
 	void query_file_of_file(const string& str);

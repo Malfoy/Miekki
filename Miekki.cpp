@@ -336,7 +336,7 @@ vector<similarity_score> Miekki::query_sequence(const string& str,uint32_t& acti
 
 
 
-vector<vector<similarity_score>> Miekki::query_sequences(vector<pair<string,uint32_t>>& batch){
+vector<vector<similarity_score>> Miekki::query_sequences1(vector<pair<string,uint32_t>>& batch){
 	cout<<"-"<<flush;
 	vector<vector<similarity_score>> result;
 	result.resize(batch.size(),(query_output));
@@ -358,21 +358,6 @@ vector<vector<similarity_score>> Miekki::query_sequences(vector<pair<string,uint
 				}
 			}
 		}
-		//~ bool load(false);
-		//~ for(uint i_batch(0);i_batch<batch.size();++i_batch){
-			//~ if(sketch_batch[i_batch][i_mini]!=maximal_minimizer){load=true;break;}
-		//~ }
-		//~ if(not load){continue;}
-		//~ slice.clear();
-		//~ get_minimizers(index[i_mini],slice);
-		//~ for(uint i_slice=0;i_slice<index_size;++i_slice){
-			//~ for(uint i_batch(0);i_batch<batch.size();++i_batch){
-				//~ if(sketch_batch[i_batch][i_mini]==slice[i_slice]){
-					//~ result[i_batch][i_slice].score++;
-				//~ }
-			//~ }
-		//~ }
-
 	}
 	for(uint i_batch(0);i_batch<batch.size();++i_batch){
 		sort(result[i_batch].begin(),result[i_batch].end(),compare_Similarity_score);
@@ -382,6 +367,82 @@ vector<vector<similarity_score>> Miekki::query_sequences(vector<pair<string,uint
 
 
 
+vector<vector<similarity_score>> Miekki::query_sequences2(vector<pair<string,uint32_t>>& batch){
+	cout<<"-"<<flush;
+	vector<vector<similarity_score>> result;
+	vector<similarity_score> batch_score;
+	batch_score.resize(batch.size());
+	result.resize(index_size,batch_score);
+	vector<vector<minimizer>> sketch_batch(number_minimizer);
+	for(uint i(0);i<batch.size();++i){
+		auto local_sketch(minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second));
+		for(uint j(0);j<number_minimizer;++j){
+			sketch_batch[j].push_back(local_sketch[j]);
+		}
+	}
+	vector<minimizer> slice;
+	//FOREACH MINIMIZER
+	for(uint32_t i_mini(0);i_mini<number_minimizer;++i_mini){
+		bool load(false);
+		for(uint i_batch(0);i_batch<batch.size();++i_batch){
+			if(sketch_batch[i_batch][i_mini]!=maximal_minimizer){load=true;break;}
+		}
+		if(not load){continue;}
+		slice.clear();
+		get_minimizers(index[i_mini],slice);
+		for(uint i_slice=0;i_slice<slice.size();++i_slice){
+			for(uint i_batch(0);i_batch<batch.size();++i_batch){
+				if(sketch_batch[i_mini][i_batch]==slice[i_slice]){
+					result[i_slice][i_batch].score++;
+				}
+			}
+		}
+	}
+	vector<vector<similarity_score>> final_result(batch.size());
+	for(uint i_batch(0);i_batch<batch.size();++i_batch){
+		final_result.push_back({0,result[0][i_batch]});
+		//~ for(uint i_slice=0;i_slice<slice.size();++i_slice){
+			//TODO COMPUTE MAX
+		//~ }
+	}
+	return final_result;
+}
+
+
+
+vector<vector<similarity_score>> Miekki::query_sequences(vector<pair<string,uint32_t>>& batch){
+	cout<<"-"<<flush;
+	uint32_t b_size(batch.size());
+	vector<vector<similarity_score>> result;
+	result.resize(batch.size(),(query_output));
+	vector<minimizer> sketch_batch(number_minimizer*b_size);
+	uint pos(0);
+	for(uint i(0);i<batch.size();++i){
+		auto local_sketch(minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second));
+		for(uint j(0);j<number_minimizer;++j){
+			sketch_batch[pos++]=local_sketch[j];
+		}
+	}
+	vector<minimizer> slice;
+	//FOREACH MINIMIZER
+	for(uint32_t i_mini(0);i_mini<number_minimizer;++i_mini){
+		slice.clear();
+		for(uint i_batch(0);i_batch<batch.size();++i_batch){
+			if(sketch_batch[i_mini*b_size+i_batch]==maximal_minimizer){continue;}
+			if(slice.empty()){get_minimizers(index[i_mini],slice);}
+			uint i_slice;
+			for(i_slice=0;i_slice<index_size;++i_slice){
+				if(sketch_batch[i_mini*b_size+i_batch]==slice[i_slice]){
+					result[i_batch][i_slice].score++;
+				}
+			}
+		}
+	}
+	for(uint i_batch(0);i_batch<batch.size();++i_batch){
+		sort(result[i_batch].begin(),result[i_batch].end(),compare_Similarity_score);
+	}
+	return result;
+}
 
 
 
@@ -408,11 +469,12 @@ void Miekki::query_file(const string& str){
 				batch.push_back({ref,0});
 				names.push_back(head);
 			}
-			if(batch.size()>100){
+			if(batch.size()>200){
 				auto result(query_sequences(batch));
 				string toWrite;
 				for(uint i_batch(0);i_batch<batch.size();i_batch++){
 					toWrite+=names[i_batch]+":";
+					if(result.empty()){break;}
 					for(uint32_t i(0);i<min((uint32_t)10,(uint32_t)result[i_batch].size());++i){//RETURN THE 10 BEST HITS
 						//FILTER ON HITS
 						if(result[i_batch][i].score<1000000){
