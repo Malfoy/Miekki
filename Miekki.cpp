@@ -26,8 +26,8 @@ using namespace std;
 
 
 uint64_t TP(0),FP(0),FN(0);
-minimizer maximal_minimizer(-1);
-uint64_t maximal_hash(-1);
+static constexpr minimizer maximal_minimizer(-1);
+static constexpr uint64_t maximal_hash(-1);
 
 
 
@@ -211,6 +211,20 @@ vector<minimizer>  Miekki::minhash_sketch_partition_solid_kmers(const string& re
 
 
 
+template<typename T> void Miekki::minhash_sketch_partition_solid_kmers(const string& reference,uint32_t& active_minimizer, T out){
+    pair<vector<minimizer>,vector<uint64_t>> sketch( minhash_sketch_partition(reference,active_minimizer));
+    for(uint i(0);i<sketch.first.size();++i){
+        if(not check_bloom(sketch.second[i])){
+            sketch.first[i]=maximal_minimizer;
+            active_minimizer--;
+        }
+        out[i] = sketch.first[i];
+    }
+
+}
+
+
+
 void Miekki::add_index(minimizer m,uint32_t i){
 	if(number_bit_minimizer==16){
 		index[i].push_back(m/256);
@@ -247,7 +261,6 @@ void Miekki::insert_sequence(const string& str, const string& title){
 			}
 		}
 		file_names.push_back(title);
-		query_output.push_back({((uint32_t)index[0].size()-(uint32_t)1),0});//TODO OPTIM
 		index_size++;
 		sketch_size.push_back(active_minimizer);
 		approx_cardinality=((0.72134*(active_minimizer*active_minimizer)/approx_cardinality));
@@ -263,7 +276,6 @@ void Miekki::insert_sequence(const string& str, const string& title){
 
 void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
 	uint32_t actived_minimizer;
-	double approx_cardinality(0);
 	vector<pair<vector<minimizer>,vector<uint64_t>>> Vsketch;
 	for(uint g(0);g<Vstr.size();g++){
 		auto double_sketch(minhash_sketch_partition(Vstr[g].first,actived_minimizer));
@@ -273,7 +285,8 @@ void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
 	#pragma omp critical(update_index_structure)
 	{
 		for(uint g(0);g<Vstr.size();g++){
-			double active_minimizer=0;
+            double approx_cardinality(0);
+            uint32_t active_minimizer=0;
 			for(uint i(0);i<Vsketch[g].first.size();++i){
 				add_index(Vsketch[g].first[i],i);
 				if(Vsketch[g].first[i]!=maximal_minimizer){
@@ -288,14 +301,13 @@ void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
 				}
 			}
 			file_names.push_back(Vstr[g].second);
-			query_output.push_back({((uint32_t)index[0].size()-(uint32_t)1),0});//TODO OPTIM
 			index_size++;
 			sketch_size.push_back(active_minimizer);
 			approx_cardinality=((0.72134*(active_minimizer*active_minimizer)/approx_cardinality));
 			if(approx_cardinality>Vstr[g].first.size()){
 				genome_size.push_back(Vstr[g].first.size());
 			}else{
-				genome_size.push_back(approx_cardinality);
+                genome_size.push_back(uint64_t(approx_cardinality));
 			}
 		}
 	}
@@ -303,14 +315,8 @@ void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
 
 
 
-bool compare_Similarity_score(const similarity_score &a, const similarity_score &b){
-    return a.score > b.score;
-}
-
-
-
-vector<similarity_score> Miekki::query_sequence(const string& str,uint32_t& active_minimizer){
-	vector<similarity_score> result=(query_output);
+matrix::vector<score_t> Miekki::query_sequence(const string& str,uint32_t& active_minimizer){
+    matrix::vector<score_t> result(index_size, 0);
 	auto double_sketch(minhash_sketch_partition(str,active_minimizer));
 	active_minimizer=0;
 	vector<minimizer> slice;
@@ -324,126 +330,96 @@ vector<similarity_score> Miekki::query_sequence(const string& str,uint32_t& acti
 			get_minimizers(index[i],slice);
 			for(uint32_t j(0);j<slice.size();++j){
 				if(query_minimizer==slice[j]){
-					result[j].score++;
+                    result[j]++;
 				}else{
 				}
 			}
 		}
 	}
-	sort(result.begin(),result.end(),compare_Similarity_score);
 	return result;
 }
 
 
 
-vector<vector<similarity_score>> Miekki::query_sequences1(vector<pair<string,uint32_t>>& batch){
+matrix::matrix<score_t> Miekki::query_sequences(vector<pair<string,uint32_t>>& batch){
 	cout<<"-"<<flush;
-	vector<vector<similarity_score>> result;
-	result.resize(batch.size(),(query_output));
-	vector<vector<minimizer>> sketch_batch;
+
+    matrix::matrix<minimizer> sketch_batch(batch.size(), number_minimizer);
 	for(uint i(0);i<batch.size();++i){
-		sketch_batch.push_back(minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second));
+        minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second, sketch_batch.row(i));
 	}
+
+    matrix::matrix<score_t> result(batch.size(), index_size, 0);
 	vector<minimizer> slice;
 	//FOREACH MINIMIZER
-	for(uint32_t i_mini(0);i_mini<number_minimizer;++i_mini){
+    for(idx_t i_mini = 0 ; i_mini < idx_t(number_minimizer) ; ++i_mini){
 		slice.clear();
-		for(uint i_batch(0);i_batch<batch.size();++i_batch){
-			if(sketch_batch[i_batch][i_mini]==maximal_minimizer){continue;}
-			if(slice.empty()){get_minimizers(index[i_mini],slice);}
-			uint i_slice;
-			for(i_slice=0;i_slice<index_size;++i_slice){
-				if(sketch_batch[i_batch][i_mini]==slice[i_slice]){
-					result[i_batch][i_slice].score++;
-				}
+        for(idx_t i_batch = 0 ; i_batch < idx_t(batch.size()) ; ++i_batch){
+            minimizer mini = sketch_batch(i_batch, i_mini);
+            if(mini == maximal_minimizer){
+                continue;
+            }
+            if(slice.empty()){ get_minimizers(index[i_mini],slice); }
+            for(idx_t genome_id = 0 ; genome_id < idx_t(index_size) ; ++genome_id){
+                if(mini == slice[genome_id]){
+                    result(i_batch, genome_id)++;
+                }
 			}
 		}
 	}
-	for(uint i_batch(0);i_batch<batch.size();++i_batch){
-		sort(result[i_batch].begin(),result[i_batch].end(),compare_Similarity_score);
-	}
-	return result;
+
+    return result;
 }
 
 
 
-vector<vector<similarity_score>> Miekki::query_sequences2(vector<pair<string,uint32_t>>& batch){
-	cout<<"-"<<flush;
-	vector<vector<similarity_score>> result;
-	vector<similarity_score> batch_score;
-	batch_score.resize(batch.size());
-	result.resize(index_size,batch_score);
-	vector<vector<minimizer>> sketch_batch(number_minimizer);
-	for(uint i(0);i<batch.size();++i){
-		auto local_sketch(minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second));
-		for(uint j(0);j<number_minimizer;++j){
-			sketch_batch[j].push_back(local_sketch[j]);
-		}
-	}
-	vector<minimizer> slice;
-	//FOREACH MINIMIZER
-	for(uint32_t i_mini(0);i_mini<number_minimizer;++i_mini){
-		bool load(false);
-		for(uint i_batch(0);i_batch<batch.size();++i_batch){
-			if(sketch_batch[i_batch][i_mini]!=maximal_minimizer){load=true;break;}
-		}
-		if(not load){continue;}
-		slice.clear();
-		get_minimizers(index[i_mini],slice);
-		for(uint i_slice=0;i_slice<slice.size();++i_slice){
-			for(uint i_batch(0);i_batch<batch.size();++i_batch){
-				if(sketch_batch[i_mini][i_batch]==slice[i_slice]){
-					result[i_slice][i_batch].score++;
-				}
-			}
-		}
-	}
-	vector<vector<similarity_score>> final_result(batch.size());
-	for(uint i_batch(0);i_batch<batch.size();++i_batch){
-		final_result.push_back({0,result[0][i_batch]});
-		//~ for(uint i_slice=0;i_slice<slice.size();++i_slice){
-			//TODO COMPUTE MAX
-		//~ }
-	}
-	return final_result;
+void Miekki::filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection, std::vector<similarity_score>& min_heap) {
+    const auto compare = [](const similarity_score& a, const similarity_score& b) { return a.intersection > b.intersection; };
+
+    for(idx_t genome_id = 0; genome_id < results.size(); genome_id++) {
+        score_t score = results[genome_id];
+        if(score < min_score) continue;
+        double jaccard = double(score) / sketch_size[genome_id];
+        double intersection = jaccard * genome_size[genome_id];
+        if(intersection < min_intersection) continue;
+
+        if(min_heap.size() >= nresults) {
+            if(min_heap.front().intersection > intersection) continue; // New element is less than the minimum
+            std::pop_heap(min_heap.begin(), min_heap.end(), compare);
+            min_heap.pop_back();
+        }
+
+        min_heap.emplace_back(similarity_score{seqid_t(genome_id), score, jaccard, intersection});
+        std::push_heap(min_heap.begin(), min_heap.end(), compare);
+    }
+
+    std::sort_heap(min_heap.begin(), min_heap.end(), compare);
 }
 
 
 
-vector<vector<similarity_score>> Miekki::query_sequences(vector<pair<string,uint32_t>>& batch){
-	cout<<"-"<<flush;
-	uint32_t b_size(batch.size());
-	vector<vector<similarity_score>> result;
-	result.resize(batch.size(),(query_output));
-	vector<minimizer> sketch_batch(number_minimizer*b_size);
-	uint pos(0);
-	for(uint i(0);i<batch.size();++i){
-		auto local_sketch(minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second));
-		for(uint j(0);j<number_minimizer;++j){
-			sketch_batch[pos++]=local_sketch[j];
-		}
-	}
-	vector<minimizer> slice;
-	//FOREACH MINIMIZER
-	for(uint32_t i_mini(0);i_mini<number_minimizer;++i_mini){
-		slice.clear();
-		for(uint i_batch(0);i_batch<batch.size();++i_batch){
-			if(sketch_batch[i_mini*b_size+i_batch]==maximal_minimizer){continue;}
-			if(slice.empty()){get_minimizers(index[i_mini],slice);}
-			uint i_slice;
-			for(i_slice=0;i_slice<index_size;++i_slice){
-				if(sketch_batch[i_mini*b_size+i_batch]==slice[i_slice]){
-					result[i_batch][i_slice].score++;
-				}
-			}
-		}
-	}
-	for(uint i_batch(0);i_batch<batch.size();++i_batch){
-		sort(result[i_batch].begin(),result[i_batch].end(),compare_Similarity_score);
-	}
-	return result;
+std::vector<similarity_score> Miekki::filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection) {
+    std::vector<similarity_score> min_heap;
+    filter_results(results, nresults, min_score, min_intersection, min_heap);
+    return min_heap;
 }
 
+
+
+std::vector<matrix::vector<similarity_score>> Miekki::filter_results(matrix::matrix<score_t> results, size_t nresults, score_t min_score, double min_intersection) {
+    std::vector<similarity_score> min_heap;
+    std::vector<matrix::vector<similarity_score>> filtered_results;
+    filtered_results.reserve(results.rows());
+
+    for(idx_t i=0 ; i < results.rows() ; i++) {
+        filter_results(results.row(i), nresults, min_score, min_intersection, min_heap);
+        filtered_results.emplace_back(min_heap.size());
+        std::copy(min_heap.begin(), min_heap.end(), filtered_results.back().begin());
+        min_heap.clear();
+    }
+
+    return filtered_results;
+}
 
 
 
@@ -455,6 +431,30 @@ void Miekki::query_file(const string& str){
 	{
 		vector<pair<string,uint32_t>> batch;
 		vector<string> names;
+        string toWrite;
+
+        auto do_batch = [&]() {
+            auto results = filter_results(query_sequences(batch), 10, 10, 0.5*threshold);
+            for(uint i_batch(0);i_batch<batch.size();i_batch++) {
+                auto& result = results[i_batch];
+                toWrite+=names[i_batch]+":";
+                for(auto& sim: result) {
+                    toWrite+=(to_string(sim.genome)+"\t"+to_string(sim.matches)+"\t"+to_string(uint(sim.intersection))+"\t"+ to_string(sim.jaccard)+";");
+                }
+                toWrite+="\n";
+            }
+            if(toWrite.size()>0){
+                #pragma omp critical(outfile)
+                {
+                    *out<<toWrite;
+                }
+                toWrite.clear();
+            }
+            batch.clear();
+            names.clear();
+        };
+
+
 		while(not in->eof()){
 			string ref,head;
 			#pragma omp critical(readfile)
@@ -470,60 +470,11 @@ void Miekki::query_file(const string& str){
 				names.push_back(head);
 			}
 			if(batch.size()>200){
-				auto result(query_sequences(batch));
-				string toWrite;
-				for(uint i_batch(0);i_batch<batch.size();i_batch++){
-					toWrite+=names[i_batch]+":";
-					if(result.empty()){break;}
-					for(uint32_t i(0);i<min((uint32_t)10,(uint32_t)result[i_batch].size());++i){//RETURN THE 10 BEST HITS
-						//FILTER ON HITS
-						if(result[i_batch][i].score<1000000){
-							break;
-						}
-						double jaccard_value(((double)(result[i_batch][i].score)/sketch_size[result[i_batch][i].sequence_identifier]));
-						double intersection_value(((double)(result[i_batch][i].score)*genome_size[result[i_batch][i].sequence_identifier])/sketch_size[result[i_batch][i].sequence_identifier]);
-						if(intersection_value>0.5*threshold){
-							toWrite+=(file_names[i]+"	"+to_string(result[i_batch][i].score)+"	"+to_string((uint)intersection_value)+"	"+ to_string(jaccard_value)+";");
-						}else{
-							break;
-						}
-					}
-					toWrite+="\n";
-				}
-				if(toWrite.size()>0){
-					#pragma omp critical(outfile)
-					{
-						*out<<toWrite;
-					}
-				}
-				batch.clear();
-				names.clear();
+                do_batch();
 			}
 		}
-		auto result(query_sequences(batch));
-		string toWrite;
-		for(uint i_batch(0);i_batch<batch.size();i_batch++){
-			toWrite+=names[i_batch]+":";
-			for(uint32_t i(0);i<min((uint32_t)10,(uint32_t)result[i_batch].size());++i){//RETURN THE 100 BEST HITS
-				//FILTER ON HITS
-				if(result[i_batch][i].score<1000000){
-					break;
-				}
-				double jaccard_value(((double)(result[i_batch][i].score)/sketch_size[result[i_batch][i].sequence_identifier]));
-				double intersection_value(((double)(result[i_batch][i].score)*genome_size[result[i_batch][i].sequence_identifier])/sketch_size[result[i_batch][i].sequence_identifier]);
-				if(intersection_value>0.5*threshold){
-					toWrite+=(file_names[i]+"	"+to_string(result[i_batch][i].score)+"	"+to_string((uint)intersection_value)+"	"+ to_string(jaccard_value)+";");
-				}else{
-					break;
-				}
-			}
-		}
-		if(toWrite.size()>0){
-			#pragma omp critical(outfile)
-			{
-				*out<<toWrite<<"\n";
-			}
-		}
+
+        do_batch();
 	}
 	*out<<flush;
 	delete in;
@@ -544,22 +495,12 @@ void Miekki::query_whole_file(const string& str){
 	}
 	if(ref.size()<kmer_size){return;}
 	uint active_minimizer(0);
-	auto result(query_sequence(ref,active_minimizer));
+    auto result = filter_results(query_sequence(ref,active_minimizer), 10, 10, 0.5*threshold);
 	string toWrite;
-	for(uint32_t i(0);i<min((uint32_t)100,(uint32_t)result.size());++i){//RETURN THE 100 BEST HITS
-		//FILTER ON HITS
-		if(result[i].score<3){
-			break;
-		}
-		double jaccard_value(((double)(result[i].score)/sketch_size[result[i].sequence_identifier]));
-		double intersection_value(((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier]);
-		if(intersection_value>0.5*threshold){
-			//~ toWrite+=(file_names[i]+"	"+to_string(result[i].score)+"	"+to_string((uint)intersection_value)+"	"+ to_string(jaccard_value)+";");
-			toWrite+=(to_string(i)+"	"+to_string(result[i].score)+"	"+to_string((uint)intersection_value)+"	"+ to_string(jaccard_value)+";");
-		}else{
-			break;
-		}
-	}
+
+    for(auto& sim: result) {
+        toWrite+=(to_string(sim.genome)+"\t"+to_string(sim.matches)+"\t"+to_string(uint(sim.intersection))+"\t"+ to_string(sim.jaccard)+";");
+    }
 	if(toWrite.size()>0){
 		#pragma omp critical(outfile)
 		{
@@ -773,10 +714,6 @@ Miekki::Miekki(const string& input){
 	}
 	sketch_size.assign(index_size,0);
 	in->read((char*)sketch_size.data(),index_size*sizeof(uint32_t));
-	query_output.assign(index_size,{0,0});
-	for(uint i(0);i<query_output.size();i++){
-		query_output[i].sequence_identifier=i;
-	}
 }
 
 
@@ -799,18 +736,10 @@ void Miekki::query_file_exact(const string& str){
 				continue;
 			}
 			uint active_minimizer(0);
-			auto result(query_sequence(ref,active_minimizer));
-			for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){
-				//FILTER ON HITS
-				if(result[i].score<10){break;}
-				//RESULT ESTIMATION
-				double jax,inter;
-				jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
-				inter=((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier];
-				//FILTER ON ration
-				if(inter<threshold){break;}
-				string file_name(file_names[result[i].sequence_identifier]);
-				batch[file_name].push_back({{ref,head},{jax,inter}});
+            auto result = filter_results(query_sequence(ref,active_minimizer), 5, 10, threshold);
+            for(auto& sim: result) {
+                string file_name(file_names[sim.genome]);
+                batch[file_name].push_back({{ref,head},{sim.jaccard,sim.intersection}});
 				if(batch[file_name].size()>=100){
 					ground_truth_batch(batch[file_name],file_name);
 					batch[file_name].clear();
@@ -844,18 +773,10 @@ void Miekki::query_whole_file_exact(const string& str,unordered_map<string,vecto
 		}
 	}
 	uint active_minimizer(0);
-	auto result(query_sequence(ref,active_minimizer));
-	for(uint32_t i(0);i<min((uint32_t)5,(uint32_t)result.size());++i){
-		//FILTER ON HITS
-		if(result[i].score<5){break;}
-		//RESULT ESTIMATION
-		double jax,inter;
-		jax=((double)(result[i].score)/sketch_size[result[i].sequence_identifier]);
-		inter=((double)(result[i].score)*genome_size[result[i].sequence_identifier])/sketch_size[result[i].sequence_identifier];
-		//FILTER ON ration
-		if(inter<threshold){break;}
-		string file_name(file_names[result[i].sequence_identifier]);
-		batch[file_name].push_back({{ref,str},{jax,inter}});
+    auto result = filter_results(query_sequence(ref,active_minimizer), 5, 5, threshold);
+    for(auto& sim: result) {
+        string file_name(file_names[sim.genome]);
+        batch[file_name].push_back({{ref,head},{sim.jaccard,sim.intersection}});
 		if(batch[file_name].size()>=100){
 			ground_truth_batch(batch[file_name],file_name);
 			batch[file_name].clear();
@@ -962,7 +883,7 @@ void Miekki::get_minimizers(const string& cstr,vector<minimizer>& V){
 	}else{
 		V.resize(str.size());
 	}
-	for(uint32_t i(0);i<str.size();i+=2){
+    for(uint32_t i(0);i<str.size();i+=(number_bit_minimizer==16 ? 2 : 1)){
 		if(number_bit_minimizer==16){
 			V[i/2]=(uint8_t)str[i]*256+(uint8_t)str[i+1];
 		}else if(number_bit_minimizer==8){

@@ -13,20 +13,22 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "utils.h"
+#include "matrix.hpp"
 
 
 
 using namespace std;
 
+using score_t = uint32_t;
+using seqid_t = uint32_t;
+using matrix::idx_t;
 
 
-struct similarity_score{
-	uint32_t sequence_identifier;
-	uint32_t score;
-	//~ uint32_t active_minimizer;
+struct similarity_score {
+    seqid_t genome;
+    score_t matches;
+    double jaccard, intersection;
 };
-
-
 
 class Miekki{
 public:
@@ -58,7 +60,6 @@ public:
 	vector<uint64_t> genome_size;
 	omp_lock_t lock[10000];
 	ofstream* out;
-	vector<similarity_score> query_output;
 
 
 
@@ -97,10 +98,8 @@ public:
 	//CORE FUNCTIONS
 	void insert_sequence(const string& str, const string& title);
 	void insert_sequences(const vector<pair<string,string>>& Vstr);
-	vector<similarity_score> query_sequence(const string& str,uint32_t& lol);
-	vector<vector<similarity_score>> query_sequences( vector<pair<string,uint32_t>>& batch);
-	vector<vector<similarity_score>> query_sequences1(vector<pair<string,uint32_t>>& batch);
-	vector<vector<similarity_score>> query_sequences2(vector<pair<string,uint32_t>>& batch);
+    matrix::vector<score_t> query_sequence(const string& str,uint32_t& lol);
+    matrix::matrix<score_t> query_sequences(vector<pair<string,uint32_t>>& batch);
 	void query_file(const string& str);
 	void query_whole_file(const string& str);
 	void query_file_of_file(const string& str);
@@ -119,6 +118,7 @@ public:
 	minimizer mantis(uint64_t n);
 	pair<vector<minimizer>,vector<uint64_t>> minhash_sketch_partition(const string& reference,uint32_t& active_minimizer);
 	vector<minimizer>  minhash_sketch_partition_solid_kmers(const string& reference,uint32_t& active_minimizer);
+    template<typename T> void minhash_sketch_partition_solid_kmers(const string& reference,uint32_t& active_minimizer, T);
 	void ground_truth(const string& sequence,const string& file, double jax);
 	void ground_truth_batch(vector<pair<pair<string,string>,pair<double,double>>>& V,string file);
 	void insert_bloom(uint64_t);
@@ -129,6 +129,10 @@ public:
 	void update_kmer_RC(kmer& min, char nuc);
 	kmer rcb(kmer min);
 	void merge_indexes(Miekki* other_index);
+
+    void filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection, std::vector<similarity_score>& min_heap);
+    std::vector<matrix::vector<similarity_score>> filter_results(matrix::matrix<score_t> results, size_t nresults, score_t min_score, double min_intersection);
+    std::vector<similarity_score> filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection);
 
 };
 
