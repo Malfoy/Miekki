@@ -140,7 +140,7 @@ struct vector {
     vector(idx_t size) : _data(new scalar_t[size_t(size)]), _size(size) {}
     vector(idx_t size, scalar_t v) : _data(new scalar_t[size_t(size)]{v}), _size(size) {}
     vector(unique_arr_t&& data, idx_t size) : _data(std::move(data)), _size(size) {}
-    vector(const scalar_t (& data)[], idx_t size) : vector(size) {
+    vector(iterator* data, idx_t size) : vector(size) {
         std::copy(data, data + _size);
     }
     vector(vector&&) = default;

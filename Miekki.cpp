@@ -362,7 +362,7 @@ matrix::matrix<score_t> Miekki::query_sequences(vector<pair<string,uint32_t>>& b
             if(slice.empty()){ get_minimizers(index[i_mini],slice); }
             for(idx_t genome_id = 0 ; genome_id < idx_t(index_size) ; ++genome_id){
                 if(mini == slice[genome_id]){
-                    result(i_batch, genome_id)++;
+                    ++result(i_batch, genome_id);
                 }
 			}
 		}
@@ -468,13 +468,15 @@ void Miekki::query_file(const string& str){
 			}else{
 				batch.push_back({ref,0});
 				names.push_back(head);
-			}
-			if(batch.size()>200){
-                do_batch();
+				if(batch.size()>200){
+					do_batch();
+				}
 			}
 		}
 
-        do_batch();
+		if(not batch.empty()) {
+			do_batch();
+		}
 	}
 	*out<<flush;
 	delete in;
