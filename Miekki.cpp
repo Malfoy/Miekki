@@ -18,13 +18,18 @@
 #include "zstr.hpp"
 #include "Miekki.h"
 #include "utils.h"
+#include "SIMDCompressionAndIntersection/include/codecfactory.h"
+#include "SIMDCompressionAndIntersection/include/intersection.h"
 
 
 
+using namespace SIMDCompressionLib;
 using namespace std;
 
 
 
+IntegerCODEC &codec = *CODECFactory::getFromName("s-fastpfor-1");
+intersectionfunction inter =IntersectionFactory::getFromName("simd");
 uint64_t TP(0),FP(0),FN(0);
 static constexpr minimizer maximal_minimizer(-1);
 static constexpr uint64_t maximal_hash(-1);
@@ -227,11 +232,10 @@ template<typename T> void Miekki::minhash_sketch_partition_solid_kmers(const str
 
 void Miekki::add_index(minimizer m,uint32_t i){
 	if(number_bit_minimizer==16){
-		index[i].push_back(m/256);
-		index[i].push_back(m%256);
-		//~ exit(0);
+		cout<<"jai dis UN byte"<<endl;
+		exit(0);
 	}else if(number_bit_minimizer==8){
-		index[i].push_back(m);
+		index[i].cells[m].push_back(file_names.size());
 	}else{
 		cout<<"not implemented"<<endl;
 		exit(0);
@@ -307,19 +311,26 @@ void Miekki::insert_sequences(const vector<pair<string,string>>& Vstr){
 			if(approx_cardinality>Vstr[g].first.size()){
 				genome_size.push_back(Vstr[g].first.size());
 			}else{
-                genome_size.push_back(uint64_t(approx_cardinality));
+          genome_size.push_back(uint64_t(approx_cardinality));
 			}
 		}
 	}
 }
 
 
+void Miekki::get_genomes(uint32_t partition,uint32_t fingerprint,vector<uint32_t>& v){
+	uint64_t sizeV(index[partition].cell_sizes[fingerprint]);
+	v.resize(sizeV);
+	codec.decodeArray(index[partition].cells[fingerprint].data(), index[partition].cells[fingerprint].size(),v.data(), sizeV);
+}
+
+
 
 matrix::vector<score_t> Miekki::query_sequence(const string& str,uint32_t& active_minimizer){
-    matrix::vector<score_t> result(index_size, 0);
+  matrix::vector<score_t> result(index_size, 0);
 	auto double_sketch(minhash_sketch_partition(str,active_minimizer));
 	active_minimizer=0;
-	vector<minimizer> slice;
+	vector<uint32_t> genomes;
 	for(uint32_t i(0);i<double_sketch.first.size();++i){
 		minimizer query_minimizer(double_sketch.first[i]);
 		if(query_minimizer!=maximal_minimizer){
@@ -327,12 +338,9 @@ matrix::vector<score_t> Miekki::query_sequence(const string& str,uint32_t& activ
 				continue;
 			}
 			active_minimizer++;
-			get_minimizers(index[i],slice);
-			for(uint32_t j(0);j<slice.size();++j){
-				if(query_minimizer==slice[j]){
-                    result[j]++;
-				}else{
-				}
+			get_genomes(i,query_minimizer,genomes);
+			for(uint32_t j(0);j<genomes.size();++j){
+      	result[j]++;
 			}
 		}
 	}
@@ -349,25 +357,29 @@ matrix::matrix<score_t> Miekki::query_sequences(vector<pair<string,uint32_t>>& b
         minhash_sketch_partition_solid_kmers(batch[i].first,batch[i].second, sketch_batch.row(i));
 	}
 
-    matrix::matrix<score_t> result(batch.size(), index_size, 0);
-	vector<minimizer> slice;
-	//FOREACH MINIMIZER
+	  matrix::matrix<score_t> result(batch.size(), index_size, 0);
+		vector<uint32_t> genomes;
+		//FOREACH MINIMIZER
     for(idx_t i_mini = 0 ; i_mini < idx_t(number_minimizer) ; ++i_mini){
-		slice.clear();
+			genomes.clear();
         for(idx_t i_batch = 0 ; i_batch < idx_t(batch.size()) ; ++i_batch){
             minimizer mini = sketch_batch(i_batch, i_mini);
             if(mini == maximal_minimizer){
                 continue;
             }
-            if(slice.empty()){ get_minimizers(index[i_mini],slice); }
-            for(idx_t genome_id = 0 ; genome_id < idx_t(index_size) ; ++genome_id){
-                if(mini == slice[genome_id]){
-                    ++result(i_batch, genome_id);
-                }
+						get_genomes(i_batch,mini,genomes);
+						for(uint32_t j(0);j<genomes.size();++j){
+							for(idx_t genome_id = 0 ; genome_id < idx_t(index_size) ; ++genome_id){
+			      		++result(i_batch, genome_id);
+							}
+						}
+            // if(slice.empty()){ get_minimizers(index[i_mini],slice); }
+            // for(idx_t genome_id = 0 ; genome_id < idx_t(index_size) ; ++genome_id){
+            //   if(mini == slice[genome_id]){
+            //       ++result(i_batch, genome_id);
+            //   }
 			}
 		}
-	}
-
     return result;
 }
 
@@ -663,8 +675,12 @@ void Miekki::dump_disk(const string& output_file){
 		decompress_index();
 	}
 	for(uint32_t i(0);i<number_minimizer;++i){
-		auto point =&(index[i][0]);
-		out->write((char*)point,index_size*sizeof(minimizer));
+		for(uint32_t ii(0);ii<256;++ii){
+			uint32_t sizeV(index[i].cell_sizes[ii]);
+			out->write(reinterpret_cast<char*>(&sizeV),sizeof(sizeV));
+			auto point =&(index[i].cells[ii][0]);
+			out->write((char*)point,sizeV*sizeof(uint32_t));
+		}
 	}
 	auto point =&(genome_size[0]);
 	out->write((char*)point,index_size*sizeof(uint64_t));
@@ -698,15 +714,22 @@ Miekki::Miekki(const string& input){
 	in-> read(reinterpret_cast<char *>(&containment_estimation), sizeof(containment_estimation));
 	in-> read(reinterpret_cast<char *>(&threshold), sizeof(threshold));
 	in-> read(reinterpret_cast<char *>(&compressed), sizeof(compressed));
-	string str(index_size*sizeof(minimizer),-1);
-	index.assign(number_minimizer,str);
+	// string str(index_size*sizeof(minimizer),-1);
+	index.resize(number_minimizer);
 	number_hash=(5);
 	maximal_minimizer=(-1);
 	compressed=false;
 	offsetUpdatekmer=1;
 	offsetUpdatekmer<<=2*kmer_size;
 	for(uint32_t i(0);i<number_minimizer;++i){
-		in->read((char*)(index[i].data()),index_size*sizeof(minimizer));
+		for(uint32_t ii(0);ii<256;++ii){
+			uint32_t sizeV;
+			in->read(reinterpret_cast<char*>(&sizeV),sizeof(sizeV));
+			index[i].cell_sizes[ii]==sizeV;
+			index[i].cells[ii].resize(sizeV);
+			auto point =&(index[i].cells[ii][0]);
+			in->read((char*)point,sizeV*sizeof(uint32_t));
+		}
 	}
 	genome_size.assign(index_size,0);
 	in->read((char*)genome_size.data(),index_size*sizeof(uint64_t));
@@ -862,7 +885,7 @@ void Miekki::ground_truth_batch(vector<pair<pair<string,string>,pair<double,doub
 
 void Miekki::compress_index(uint32_t compression_level){
 	for(uint32_t i(0);i<number_minimizer;++i){
-		index[i]=compress_string(index[i],compression_level);
+		compress_block(index[i]);
 	}
 	compressed=true;
 }
@@ -871,41 +894,67 @@ void Miekki::compress_index(uint32_t compression_level){
 
 void Miekki::decompress_index(){
 	for(uint32_t i(0);i<number_minimizer;++i){
-		index[i]=decompress_string(index[i]);
+		decompress_block(index[i]);
 	}
 	compressed=false;
 }
 
 
 
-void Miekki::get_minimizers(const string& cstr,vector<minimizer>& V){
-	string str=compressed?decompress_string(cstr):cstr;
-	if(number_bit_minimizer==16){
-		V.resize(str.size()/2);
-	}else{
-		V.resize(str.size());
-	}
-    for(uint32_t i(0);i<str.size();i+=(number_bit_minimizer==16 ? 2 : 1)){
-		if(number_bit_minimizer==16){
-			V[i/2]=(uint8_t)str[i]*256+(uint8_t)str[i+1];
-		}else if(number_bit_minimizer==8){
-			V[i]=(uint8_t)str[i];
-		}else{
-			cout<<"not implemented"<<endl;
-			exit(0);
-		}
+// void Miekki::get_minimizers(const string& cstr,vector<minimizer>& V){
+// 	string str=compressed?decompress_string(cstr):cstr;
+// 	if(number_bit_minimizer==16){
+// 		V.resize(str.size()/2);
+// 	}else{
+// 		V.resize(str.size());
+// 	}
+//     for(uint32_t i(0);i<str.size();i+=(number_bit_minimizer==16 ? 2 : 1)){
+// 		if(number_bit_minimizer==16){
+// 			V[i/2]=(uint8_t)str[i]*256+(uint8_t)str[i+1];
+// 		}else if(number_bit_minimizer==8){
+// 			V[i]=(uint8_t)str[i];
+// 		}else{
+// 			cout<<"not implemented"<<endl;
+// 			exit(0);
+// 		}
+// 	}
+// }
+
+
+
+void Miekki::decompress_block(block& b){
+	vector<uint32_t> uncompressed_output;
+	for(uint i(0);i<256;++i){
+		uncompressed_output.resize(b.cell_sizes[i]);
+		uint64_t osef;
+		codec.decodeArray(b.cells[i].data(), uncompressed_output.size(), uncompressed_output.data(),	osef);
+		b.cells[i]=uncompressed_output;
 	}
 }
+
+
+
+void Miekki::compress_block(block& b){
+	vector<uint32_t> compressed_output;
+	for(uint i(0);i<256;++i){
+		uint sizeV(b.cells[i].size());
+		b.cell_sizes[i]=sizeV;
+		uint64_t osef;
+		compressed_output.resize(sizeV+ 1024);
+		codec.encodeArray(b.cells[i].data(), sizeV, compressed_output.data(),	osef);
+		b.cells[i]=compressed_output;
+	}
+}
+
 
 
 void Miekki::merge_indexes(Miekki* other_index){
 	uint32_t i;
 	#pragma omp parallel for num_threads(core_number)
 	for(i=(0);i<number_minimizer;++i){
-		index[i].insert(index[i].end(),other_index->index[i].begin(),other_index->index[i].end());
+		//TODO
+		// index[i].insert(index[i].end(),other_index->index[i].begin(),other_index->index[i].end());
 	}
 	//TODO MERGE BF
 	delete other_index;
-
 }
-

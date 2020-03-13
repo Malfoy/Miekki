@@ -1,5 +1,5 @@
-#ifndef MIEKKI
-#define MIEKKI
+#ifndef MIEKKI_h
+#define MIEKKI_h
 
 
 
@@ -17,7 +17,10 @@
 
 
 
+
 using namespace std;
+
+
 
 using score_t = uint32_t;
 using seqid_t = uint32_t;
@@ -29,6 +32,13 @@ struct similarity_score {
     score_t matches;
     double jaccard, intersection;
 };
+
+
+struct block{
+  vector<uint32_t> cells[256];
+  uint32_t cell_sizes[256];
+};
+
 
 class Miekki{
 public:
@@ -45,16 +55,16 @@ public:
 	uint64_t bloom_size;
 	uint32_t threshold;
 	uint32_t core_number;
+  // shared_ptr<IntegerCODEC> codec;
+  // intersectionfunction interSec;
 
 	bool Bloom_Filter_Protection;
 	bool compressed;
 	bool jaccard_estimation;
 	bool containment_estimation;
 
-	vector<string> index;
-	vector<uint64_t> index_disk;
+	vector<block> index;
 	vector<uint8_t> Bloom_Filter;
-	//~ unordered_set<uint64_t> Bloom_Filter_Forever;
 	vector<string> file_names;
 	vector<uint32_t> sketch_size;
 	vector<uint64_t> genome_size;
@@ -65,28 +75,26 @@ public:
 
 	Miekki(uint32_t kmer_size_val, uint32_t number_minimizer_log2_val, uint32_t number_bit_minimizer_val, uint32_t number_bit_mantis_val,uint32_t output_mode,const string& output_File,uint32_t bloom_size_log2_val,uint32_t threshold_val, uint32_t core_number_val)
 
-		: kmer_size(kmer_size_val),number_minimizer((uint32_t)1<<number_minimizer_log2_val), number_minimizer_log2(number_minimizer_log2_val), number_bit_minimizer(number_bit_minimizer_val), number_bit_mantis(number_bit_mantis_val), maximal_minimizer(-1),bloom_size_log2(bloom_size_log2_val),threshold(threshold_val),core_number(core_number_val),Bloom_Filter_Protection(true)
-		{
+		: kmer_size(kmer_size_val),number_minimizer((uint32_t)1<<number_minimizer_log2_val), number_minimizer_log2(number_minimizer_log2_val), number_bit_minimizer(number_bit_minimizer_val), number_bit_mantis(number_bit_mantis_val), maximal_minimizer(-1),bloom_size_log2(bloom_size_log2_val),threshold(threshold_val),core_number(core_number_val),Bloom_Filter_Protection(true){
+  		for(uint i(0);i<10000;++i){
+  			 omp_init_lock(&lock[i]);
+  		}
+  		out= new ofstream(output_File.c_str());
+  		cout<<"I output results in "<<output_File<<endl;
+  		offsetUpdatekmer=1;
+  		offsetUpdatekmer<<=2*kmer_size;
+  		containment_estimation=false;
+  		number_hash=5;
+  		index.assign(number_minimizer,{});
+  		index_size=0;
+  		bloom_size=0;
+  		compressed=false;
 
-		for(uint i(0);i<10000;++i){
-			 omp_init_lock(&lock[i]);
-		}
-		out= new ofstream(output_File.c_str());
-		cout<<"I output results in "<<output_File<<endl;
-		offsetUpdatekmer=1;
-		offsetUpdatekmer<<=2*kmer_size;
-		containment_estimation=false;
-		number_hash=5;
-		index.assign(number_minimizer,{});
-		index_size=0;
-		bloom_size=0;
-		compressed=false;
-
-		if(Bloom_Filter_Protection){
-			bloom_size=1;
-			bloom_size<<=bloom_size_log2;
-			Bloom_Filter.assign(bloom_size/8,0);
-		}
+  		if(Bloom_Filter_Protection){
+  			bloom_size=1;
+  			bloom_size<<=bloom_size_log2;
+  			Bloom_Filter.assign(bloom_size/8,0);
+  		}
 	}
 
 
@@ -111,6 +119,7 @@ public:
 	void dump_disk(const string& output_file);
 	void compress_index(uint32_t compression_level);
 	void decompress_index();
+  void get_genomes(uint32_t partition,uint32_t fingerprint,vector<uint32_t>& v);
 
 
 
@@ -129,10 +138,12 @@ public:
 	void update_kmer_RC(kmer& min, char nuc);
 	kmer rcb(kmer min);
 	void merge_indexes(Miekki* other_index);
+  void decompress_block(block& b);
+  void compress_block(block& b);
 
-    void filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection, std::vector<similarity_score>& min_heap);
-    std::vector<matrix::vector<similarity_score>> filter_results(matrix::matrix<score_t> results, size_t nresults, score_t min_score, double min_intersection);
-    std::vector<similarity_score> filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection);
+  void filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection, std::vector<similarity_score>& min_heap);
+  std::vector<matrix::vector<similarity_score>> filter_results(matrix::matrix<score_t> results, size_t nresults, score_t min_score, double min_intersection);
+  std::vector<similarity_score> filter_results(matrix::refvec<score_t> results, size_t nresults, score_t min_score, double min_intersection);
 
 };
 
