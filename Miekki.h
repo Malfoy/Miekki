@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "utils.h"
+#include "omp.h"
 #include "matrix.hpp"
 
 
